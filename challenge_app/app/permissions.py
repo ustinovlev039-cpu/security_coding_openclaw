@@ -12,9 +12,9 @@ def require_command_access(user: User) -> None:
         )
 
 def require_owner(user: User) -> None:
-    """ сам баг)))) """
-    if not user.can_execute_commands:
+    """ Owner-only зоны доступны только owner. """
+    if user.role != "owner":
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner access required",
         )
