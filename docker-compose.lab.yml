@@ -1,0 +1,65 @@
+services:
+  lab-ide:
+    build:
+      context: .
+      dockerfile: docker/lab-ide.Dockerfile
+    container_name: openclaw-lab-ide
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      PASSWORD: openclaw-lab
+      SHELL: /bin/bash
+    volumes:
+      - ./openclaw-training-fork:/workspace
+      - openclaw_lab_node_modules:/workspace/node_modules
+      - openclaw_lab_pnpm_store:/root/.local/share/pnpm/store
+    working_dir: /workspace
+    mem_limit: 4g
+    cpus: 2.0
+    security_opt:
+      - no-new-privileges:true
+
+  openclaw-app:
+    build:
+      context: .
+      dockerfile: docker/lab-ide.Dockerfile
+    container_name: openclaw-lab-app
+    ports:
+      - "127.0.0.1:18789:18789"
+    environment:
+      SHELL: /bin/bash
+      OPENCLAW_CONFIG_DIR: /workspace/.lab-state
+    volumes:
+      - ./openclaw-training-fork:/workspace
+      - openclaw_lab_node_modules:/workspace/node_modules
+      - openclaw_lab_pnpm_store:/root/.local/share/pnpm/store
+    working_dir: /workspace
+    command: bash -lc "corepack enable && pnpm install && pnpm lab:run"
+    mem_limit: 4g
+    cpus: 2.0
+    security_opt:
+      - no-new-privileges:true
+
+  checker:
+    build:
+      context: .
+      dockerfile: docker/lab-ide.Dockerfile
+    container_name: openclaw-lab-checker
+    profiles:
+      - check
+    environment:
+      SHELL: /bin/bash
+    volumes:
+      - ./openclaw-training-fork:/workspace
+      - openclaw_lab_node_modules:/workspace/node_modules
+      - openclaw_lab_pnpm_store:/root/.local/share/pnpm/store
+    working_dir: /workspace
+    command: bash -lc "corepack enable && pnpm install && pnpm lab:check"
+    mem_limit: 4g
+    cpus: 2.0
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  openclaw_lab_node_modules:
+  openclaw_lab_pnpm_store:

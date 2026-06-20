@@ -1,0 +1,270 @@
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate> git remote remove set-url
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate> git remote -v
+origin  https://github.com/ustinovlev039-cpu/security_coding_openclaw.git (fetch)
+origin  https://github.com/ustinovlev039-cpu/security_coding_openclaw.git (push)
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate> git status
+On branch prototype-solution
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+        new file:   docker-compose.lab.yml
+        new file:   openclaw-training-fork
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+  (commit or discard the untracked or modified content in submodules)
+        modified:   openclaw-training-fork (modified content, untracked content)
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        docker/
+
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate> git branch --show-current
+prototype-solution
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate> ped
+ped : Имя "ped" не распознано как имя командлета, функции, файла сценария и
+ли выполняемой программы. Проверьте правильность написания имени, а также н
+аличие и правильность пути, после чего повторите попытку.
+строка:1 знак:1
++ ped
++ ~~~
+    + CategoryInfo          : ObjectNotFound: (ped:String) [], CommandNotF
+   oundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate> pwd
+
+Path
+----
+C:\Users\Lev\PycharmProjects\openclaw-degug-gate
+
+
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate> dir
+
+
+    Каталог: C:\Users\Lev\PycharmProjects\openclaw-degug-gate
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d-----        19.06.2026     18:47                .idea
+d-----        18.05.2026     16:32                .pytest_cache
+d-----        14.05.2026     20:57                .venv
+d-----        14.05.2026     22:05                challenge_app
+d-----        19.05.2026     15:41                docker
+d-----        19.05.2026     15:07                openclaw-training-fork
+-a----        14.05.2026     21:08           3152 .gitignore
+-a----        19.05.2026     15:04           1824 docker-compose.lab.yml
+
+
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate> cd .\openclaw-training-fork\
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork> node -v
+v24.15.0
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork> pnmp -n
+pnmp : Имя "pnmp" не распознано как имя командлета, функции, файла сценария
+ или выполняемой программы. Проверьте правильность написания имени, а также
+ наличие и правильность пути, после чего повторите попытку.
+строка:1 знак:1
++ pnmp -n
++ ~~~~
+    + CategoryInfo          : ObjectNotFound: (pnmp:String) [], CommandNot
+   FoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork> pnmp -v
+pnmp : Имя "pnmp" не распознано как имя командлета, функции, файла сценария
+ или выполняемой программы. Проверьте правильность написания имени, а также
+ наличие и правильность пути, после чего повторите попытку.
+строка:1 знак:1
++ pnmp -v
++ ~~~~
+    + CategoryInfo          : ObjectNotFound: (pnmp:String) [], CommandNot
+   FoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork> pnpm -v
+pnpm : Имя "pnpm" не распознано как имя командлета, функции, файла сценария
+ или выполняемой программы. Проверьте правильность написания имени, а также
+ наличие и правильность пути, после чего повторите попытку.
+строка:1 знак:1
++ pnpm -v
++ ~~~~
+    + CategoryInfo          : ObjectNotFound: (pnpm:String) [], CommandNot
+   FoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork> pnpm -v
+pnpm : Имя "pnpm" не распознано как имя командлета, функции, файла сценария
+ или выполняемой программы. Проверьте правильность написания имени, а также
+ наличие и правильность пути, после чего повторите попытку.
+строка:1 знак:1
++ pnpm -v
++ ~~~~
+    + CategoryInfo          : ObjectNotFound: (pnpm:String) [], CommandNot
+   FoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork>
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork> corepack enable
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork> corepack prepare pnpm@latest --activate
+Preparing pnpm@latest for immediate activation...
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork> pnpm -v
+! Corepack is about to download https://registry.npmjs.org/pnpm/-/pnpm-10.23.0.tgz
+? Do you want to continue? [Y/n] y
+
+10.23.0
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork> pnpm -v
+10.23.0
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork> pnpm install
+Scope: all 37 workspace projects
+Lockfile is up to date, resolution step is skipped
+Packages: +1250
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ WARN  Request took 10886ms: https://registry.npmjs.org/pnpm
+
+   ╭──────────────────────────────────────────────╮
+   │                                              │
+   │     Update available! 10.23.0 → 11.8.0.      │
+   │     Changelog: https://pnpm.io/v/11.8.0      │
+   │   To update, run: corepack use pnpm@11.8.0   │
+   │                                              │
+   ╰──────────────────────────────────────────────╯
+
+ WARN  GET https://registry.npmjs.org/rimraf/-/rimraf-5.0.10.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/openclaw/-/openclaw-2026.3.8.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+Downloading openclaw@2026.3.8: 35,39 MB/35,39 MB, done
+ WARN  GET https://registry.npmjs.org/semver/-/semver-7.7.4.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/@line/bot-sdk/-/bot-sdk-10.6.0.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+Downloading koffi@2.15.1: 18,25 MB/18,25 MB, done
+Downloading @napi-rs/canvas-win32-x64-msvc@0.1.95: 15,75 MB/15,75 MB, done
+Packages are hard linked from the content-addressable store to the virtual store.
+  Content-addressable store is at: C:\Users\Lev\AppData\Local\pnpm\store\v10
+  Virtual store is at:             node_modules/.pnpm
+Downloading @img/sharp-win32-x64@0.34.5: 8,69 MB/8,69 MB, done
+Downloading ogg-opus-decoder@1.7.3: 6,87 MB/6,87 MB, done
+Downloading @wasm-audio-decoders/opus-ml@0.0.2: 6,39 MB/6,39 MB, done
+Downloading node-llama-cpp@3.16.2: 28,41 MB/28,41 MB, done
+ WARN  GET https://registry.npmjs.org/@node-llama-cpp/win-x64/-/win-x64-3.16.2.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.MB
+Downloading @node-llama-cpp/win-x64-vulkan@3.16.2: 23,76 MB/23,76 MB, done
+Downloading pdfjs-dist@5.5.207: 10,31 MB/10,31 MB, done
+Downloading @node-llama-cpp/win-x64@3.16.2: 7,07 MB/7,07 MB, done
+Downloading @node-llama-cpp/win-x64-cuda-ext@3.16.2: 193,34 MB/193,34 MB, do
+Downloading @node-llama-cpp/win-x64-cuda@3.16.2: 121,09 MB/121,09 MB, done
+ WARN  GET https://registry.npmjs.org/reflect-metadata/-/reflect-metadata-0.2.2.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+Downloading @lancedb/lancedb-win32-x64-msvc@0.26.2: 50,24 MB/50,24 MB, done
+ WARN  GET https://registry.npmjs.org/@smithy/util-body-length-browser/-/util-body-length-browser-4.2.1.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+../../../AppData/Local/pnpm/store/v10/tmp/_tmp_7192_b8c99b0f40cb19cabc134beda7e0984c [@tloncorp/api@0.0.2]: Running npm-install script...
+Progress: resolved 1250, reused 0, downloaded 1037, added 306
+Downloading @typescript/native-preview-win32-x64@7.0.0-dev.20260311.1: 0,00
+Progress: resolved 1250, reused 0, downloaded 1039, added 306260311.1: 4,10
+Downloading @typescript/native-preview-win32-x64@7.0.0-dev.20260311.1: 9,72
+../../../AppData/Local/pnpm/store/v10/tmp/_tmp_7192_b8c99b0f40cb19cabc134beda7e0984c [@tloncorp/api@0.0.2]: Running npm-install script, done in 14m 24.8sownloading @lydell/node-pty-win32-x64@1.2.0-beta.3: 7,30 MB/7,30 MB, done
+Downloading @rolldown/binding-win32-x64-msvc@1.0.0-rc.9: 8,50 MB/8,50 MB, donewnloading @rolldown/binding-win32-x64-msvc@1.0.0-rc.9: 5,05 MB/8,50 MB
+Progress: resolved 1250, reused 0, downloaded 1250, added 1250, done
+node_modules/.pnpm/protobufjs@7.5.4/node_modules/protobufjs: Running postinstall script...
+node_modules/.pnpm/protobufjs@6.8.8/node_modules/protobufjs: Running postinstall script...
+node_modules/.pnpm/koffi@2.15.1/node_modules/koffi: Running install script..
+node_modules/.pnpm/protobufjs@7.5.4/node_modules/protobufjs: Running postins
+node_modules/.pnpm/protobufjs@6.8.8/node_modules/protobufjs: Running postinstall script, done in 8s
+node_modules/.pnpm/koffi@2.15.1/node_modules/koffi: Running install script,
+node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild: Running postinstall script, done in 9.4s
+node_modules/.pnpm/node-llama-cpp@3.16.2_typescript@5.9.3/node_modules/node-llama-cpp: Running postinstall script...
+node_modules/.pnpm/node-llama-cpp@3.16.2_typescript@5.9.3/node_modules/node-
+node_modules/.pnpm/@matrix-org+matrix-sdk-crypto-nodejs@0.4.0/node_modules/@matrix-org/matrix-sdk-crypto-nodejs: Running postinstall script, done in 32.5s
+node_modules/.pnpm/@whiskeysockets+baileys@7.0_f116e6060e428c73be68680ef2311
+node_modules/.pnpm/@whiskeysockets+baileys@7.0_f116e6060e428c73be68680ef2311927/node_modules/@whiskeysockets/baileys: Running preinstall script, done in 2.1s
+
+dependencies:
++ @agentclientprotocol/sdk 0.16.1
++ @aws-sdk/client-bedrock 3.1007.0
++ @buape/carbon 0.0.0-beta-20260216184201
++ @clack/prompts 1.1.0
++ @discordjs/voice 0.19.1
++ @grammyjs/runner 2.0.3
++ @grammyjs/transformer-throttler 1.2.1
++ @homebridge/ciao 1.3.5
++ @larksuiteoapi/node-sdk 1.59.0
++ @line/bot-sdk 10.6.0
++ @lydell/node-pty 1.2.0-beta.3
++ @mariozechner/pi-agent-core 0.57.1
++ @mariozechner/pi-ai 0.57.1
++ @mariozechner/pi-coding-agent 0.57.1
++ @mariozechner/pi-tui 0.57.1
++ @mozilla/readability 0.6.0
++ @napi-rs/canvas 0.1.95
++ @sinclair/typebox 0.34.48
++ @slack/bolt 4.6.0
++ @slack/web-api 7.14.1
++ @whiskeysockets/baileys 7.0.0-rc.9
++ ajv 8.18.0
++ chalk 5.6.2
++ chokidar 5.0.0
++ cli-highlight 2.1.11
++ commander 14.0.3
++ croner 10.0.1
++ discord-api-types 0.38.42
++ dotenv 17.3.1
++ express 5.2.1
++ file-type 21.3.1
++ grammy 1.41.1
++ hono 4.12.7
++ https-proxy-agent 8.0.0
++ ipaddr.js 2.3.0
++ jiti 2.6.1
++ json5 2.2.3
++ jszip 3.10.1
++ linkedom 0.18.12
++ long 5.3.2
++ markdown-it 14.1.1
++ node-edge-tts 1.2.10
++ node-llama-cpp 3.16.2
++ opusscript 0.1.1
++ osc-progress 0.3.0
++ pdfjs-dist 5.5.207
++ playwright-core 1.58.2
++ qrcode-terminal 0.12.0
++ sharp 0.34.5
++ sqlite-vec 0.1.7-alpha.2
++ tar 7.5.11
++ tslog 4.10.2
++ undici 7.22.0
++ ws 8.19.0
++ yaml 2.8.2
++ zod 4.3.6
+
+devDependencies:
++ @grammyjs/types 3.25.0
++ @lit-labs/signals 0.2.0
++ @lit/context 1.1.6
++ @types/express 5.0.6
++ @types/markdown-it 14.1.2
++ @types/node 25.4.0
++ @types/qrcode-terminal 0.12.2
++ @types/ws 8.18.1
++ @typescript/native-preview 7.0.0-dev.20260311.1
++ @vitest/coverage-v8 4.0.18
++ jscpd 4.0.8
++ lit 3.3.2
++ oxfmt 0.38.0
++ oxlint 1.53.0
++ oxlint 1.53.0
++ oxlint-tsgolint 0.16.0
++ signal-utils 0.21.1
++ tsdown 0.21.2
++ tsx 4.21.0
++ typescript 5.9.3
++ vitest 4.0.18
+
+╭ Warning ─────────────────────────────────────────────────────────────────╮
+│                                                                          │
+│   Ignored build scripts: @discordjs/opus, @tloncorp/tlon-skill.          │
+│   Run "pnpm approve-builds" to pick which dependencies should be         │
+│   allowed to run scripts.                                                │
+│                                                                          │
+╰──────────────────────────────────────────────────────────────────────────╯
+
+. prepare$ command -v git >/dev/null 2>&1 && git rev-parse --is-inside-wo…
+│ ���⥬� �� 㤠���� ���� 㪠����� ����.
+└─ Done in 737ms
+Done in 32m 14.4s using pnpm v10.23.0
+(.venv) PS C:\Users\Lev\PycharmProjects\openclaw-degug-gate\openclaw-training-fork>
