@@ -1,82 +1,156 @@
-from fastapi import Depends, FastAPI
-from pydantic import BaseModel
+from __future__ import annotations
 
-from app.auth import User, get_current_user
-from app.permissions import require_command_access, require_owner
-from app.store import APP_CONFIG, DEBUG_INFO
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.hidden_validation import run_hidden_validation
+from app.lab_config import (
+    ALLOWED_FILE_PATHS,
+    EDITABLE_FILE_PATHS,
+    READABLE_FILE_PATHS,
+    STATUS_LAB_SOLVED,
+    STATUS_TESTS_FAILED,
+    STATUS_TESTS_RUNNING,
+    STATUS_VULNERABLE,
+    WORKSPACE_DIR,
+)
+from app.runner import run_fixed_tests
+from app.schemas import (
+    CheckSolutionResponse,
+    FileContentResponse,
+    FileListResponse,
+    FileUpdateRequest,
+    FileUpdateResponse,
+    LabStatusResponse,
+    ResetResponse,
+    TestRunResponse,
+    TestRunSummary,
+)
+from app.workspace import (
+    ensure_workspace,
+    is_editable_file,
+    list_allowed_files,
+    read_allowed_file,
+    read_state,
+    reset_workspace,
+    set_status,
+    write_allowed_file,
+)
+
 
 app = FastAPI(
-    title="OpenClaw Debug Gate - Secure Coding MVP.",
-    description="Training lab: find and fix broken authorization.",
+    title="OpenClaw: Ownerless Gateway",
+    description="Security Coding lab for Broken Access Control in owner-only commands.",
     version="0.1.0",
 )
 
-class ConfigPatch(BaseModel):
-    allow_debug_panel: bool | None = None
-    command_prefix: str | None = None
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "PUT", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("startup")
+def startup() -> None:
+    ensure_workspace()
+
 
 @app.get("/health")
-def health():
+def health() -> dict[str, str]:
+    ensure_workspace()
     return {"status": "ok"}
 
-@app.get("/me")
-def me(user: User = Depends(get_current_user)):
-    return {
-        "username": user.username,
-        "role": user.role,
-        "can_execute_command": user.can_execute_commands,
-    }
 
-@app.get("/commands/status")
-def command_status(user: User = Depends(get_current_user)):
-    require_command_access(user)
+def _status_response() -> LabStatusResponse:
+    ensure_workspace()
+    state = read_state()
+    last_test = state.get("last_test")
+    return LabStatusResponse(
+        name="OpenClaw: Ownerless Gateway",
+        category="Broken Access Control / Security Coding",
+        status=state.get("status", STATUS_VULNERABLE),
+        workspace=str(WORKSPACE_DIR),
+        allowed_files=list(ALLOWED_FILE_PATHS),
+        editable_files=list(EDITABLE_FILE_PATHS),
+        readable_files=list(READABLE_FILE_PATHS),
+        last_test=TestRunSummary(**last_test) if isinstance(last_test, dict) else None,
+        solved=bool(state.get("solved", False)),
+    )
 
-    return {
-        "ok": True,
-        "message": "Gateway command subsystem is online",
-        "actor": user.username,
-    }
 
-@app.post("/command/ping")
-def command_ping(user: User = Depends(get_current_user)):
-    require_command_access(user)
+@app.get("/api/lab/status", response_model=LabStatusResponse)
+def lab_status() -> LabStatusResponse:
+    return _status_response()
 
-    return {
-        "ok": True,
-        "pong": True,
-        "actor": user.username,
-    }
 
-@app.get("/config")
-def read_config(user: User = Depends(get_current_user)):
-    require_owner(user)
+@app.get("/api/lab/files", response_model=FileListResponse)
+def lab_files() -> FileListResponse:
+    return FileListResponse(files=list_allowed_files())
 
-    return {
-        "config": APP_CONFIG,
-        "actor": user.username,
-    }
 
-@app.patch("/config")
-def patch_config(payload: ConfigPatch, user: User = Depends(get_current_user)):
-    require_owner(user)
+@app.get("/api/lab/files/{file_path:path}", response_model=FileContentResponse)
+def lab_file(file_path: str) -> FileContentResponse:
+    return FileContentResponse(
+        path=file_path,
+        content=read_allowed_file(file_path),
+        editable=is_editable_file(file_path),
+    )
 
-    if payload.allow_debug_panel is not None:
-        APP_CONFIG["allow_debug_panel"] = payload.allow_debug_panel
 
-    if payload.command_prefix is not None:
-        APP_CONFIG["command_prefix"] = payload.command_prefix
+@app.put("/api/lab/files/{file_path:path}", response_model=FileUpdateResponse)
+def update_lab_file(file_path: str, payload: FileUpdateRequest) -> FileUpdateResponse:
+    normalized = write_allowed_file(file_path, payload.content)
+    return FileUpdateResponse(path=normalized, saved=True, status=STATUS_VULNERABLE)
 
-    return {
-        "ok": True,
-        "config": APP_CONFIG,
-        "actor": user.username,
-    }
 
-@app.get("/debug")
-def  debug_info(user: User = Depends(get_current_user)):
-    require_owner(user)
+@app.post("/api/lab/run-tests", response_model=TestRunResponse)
+def run_tests() -> TestRunResponse:
+    workspace = ensure_workspace()
+    set_status(STATUS_TESTS_RUNNING)
+    result = run_fixed_tests(workspace)
+    status = STATUS_VULNERABLE if result.ok else STATUS_TESTS_FAILED
+    set_status(status, last_test=result.to_summary())
+    return TestRunResponse(ok=result.ok, status=status, result=TestRunSummary(**result.to_summary()))
 
-    return {
-        "debug": DEBUG_INFO,
-        "actor": user.username,
-    }
+
+@app.post("/api/lab/reset", response_model=ResetResponse)
+def reset_lab() -> ResetResponse:
+    workspace = reset_workspace()
+    return ResetResponse(status=STATUS_VULNERABLE, workspace=str(workspace))
+
+
+@app.post("/api/lab/check-solution", response_model=CheckSolutionResponse)
+def check_solution() -> CheckSolutionResponse:
+    workspace = ensure_workspace()
+    set_status(STATUS_TESTS_RUNNING)
+
+    visible = run_fixed_tests(workspace)
+    if not visible.ok:
+        set_status(STATUS_TESTS_FAILED, last_test=visible.to_summary())
+        return CheckSolutionResponse(
+            ok=False,
+            status=STATUS_TESTS_FAILED,
+            visible_tests=TestRunSummary(**visible.to_summary()),
+            hidden_validation_passed=False,
+            hidden_validation="Hidden validation was not run because visible tests failed.",
+        )
+
+    hidden = run_hidden_validation(workspace)
+    solved = hidden.ok
+    status = STATUS_LAB_SOLVED if solved else STATUS_TESTS_FAILED
+    set_status(status, last_test=visible.to_summary())
+
+    return CheckSolutionResponse(
+        ok=solved,
+        status=status,
+        visible_tests=TestRunSummary(**visible.to_summary()),
+        hidden_validation_passed=solved,
+        hidden_validation=(
+            "Hidden validation passed."
+            if solved
+            else "Hidden validation failed. Preserve owner access, non-owner denial, and internal read-only config behavior."
+        ),
+    )

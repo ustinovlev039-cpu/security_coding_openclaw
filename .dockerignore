@@ -1,0 +1,16 @@
+**/.git
+**/.hg
+**/.svn
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.cache
+**/.turbo
+**/dist
+.lab
+frontend/dist
+*.pyc
+*.pyo
+

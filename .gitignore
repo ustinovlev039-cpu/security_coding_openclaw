@@ -184,3 +184,10 @@ fabric.properties
 # idea folder, uncomment if you don't need it
 .idea
 .env
+
+### Lab workspace/runtime artifacts
+.lab/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+challenge_app/.venv/
