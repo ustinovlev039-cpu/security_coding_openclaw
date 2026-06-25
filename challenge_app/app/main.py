@@ -60,9 +60,25 @@ app.add_middleware(
 )
 
 
+_REQUIRED_OPENCLAW_WORKSPACE_FILES = (
+    "package.json",
+    "src/auto-reply/reply/commands.ts",
+    "src/auto-reply/reply/commands-config.ts",
+    "src/auto-reply/reply/command-gates.ts",
+)
+
+
+def _ensure_openclaw_workspace_at_startup() -> None:
+    """Replace an old or unrelated named-volume workspace before the IDE opens."""
+    if any(not (WORKSPACE_DIR / relative_path).is_file() for relative_path in _REQUIRED_OPENCLAW_WORKSPACE_FILES):
+        reset_workspace()
+        return
+    ensure_workspace()
+
+
 @app.on_event("startup")
 def startup() -> None:
-    ensure_workspace()
+    _ensure_openclaw_workspace_at_startup()
 
 
 @app.get("/health")
@@ -130,7 +146,7 @@ def run_tests() -> TestRunResponse:
 
 @app.post("/api/lab/reset", response_model=ResetResponse)
 def reset_lab() -> ResetResponse:
-    workspace = reset_workspace()
+    reset_workspace()
     return ResetResponse(status=STATUS_VULNERABLE, workspace=WORKSPACE_ID)
 
 
