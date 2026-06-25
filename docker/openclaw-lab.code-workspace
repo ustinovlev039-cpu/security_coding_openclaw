@@ -1,0 +1,23 @@
+{
+  "folders": [
+    {
+      "name": "OPENCLAW-TRAINING-FORK",
+      "path": "/workspaces/default"
+    }
+  ],
+  "settings": {
+    "workbench.startupEditor": "none",
+    "files.exclude": {
+      "**/.git": true,
+      "**/node_modules": true,
+      "**/.lab": true,
+      "**/.lab-state": true
+    },
+    "search.exclude": {
+      "**/.git": true,
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/coverage": true
+    }
+  }
+}
