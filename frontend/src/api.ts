@@ -2,8 +2,11 @@ import type {
   CheckSolutionResponse,
   FileContentResponse,
   FileListResponse,
+  GatewaySimulationRequest,
+  GatewaySimulationResponse,
   LabStatusResponse,
   ResetResponse,
+  TreeResponse,
   TestRunResponse,
 } from "./types";
 
@@ -21,6 +24,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   status: () => request<LabStatusResponse>("/api/lab/status"),
   files: () => request<FileListResponse>("/api/lab/files"),
+  tree: (path?: string) =>
+    request<TreeResponse>(path ? `/api/lab/tree?path=${encodeURIComponent(path)}` : "/api/lab/tree"),
   file: (path: string) => request<FileContentResponse>(`/api/lab/files/${path}`),
   saveFile: (path: string, content: string) =>
     request<{ path: string; saved: boolean; status: string }>(`/api/lab/files/${path}`, {
@@ -32,5 +37,10 @@ export const api = {
   reset: () => request<ResetResponse>("/api/lab/reset", { method: "POST" }),
   checkSolution: () =>
     request<CheckSolutionResponse>("/api/lab/check-solution", { method: "POST" }),
+  gatewaySimulate: (payload: GatewaySimulationRequest) =>
+    request<GatewaySimulationResponse>("/api/lab/gateway-simulate", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
 };
-

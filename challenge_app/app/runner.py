@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.lab_config import (
     CONTAINER_WORKSPACES_DIR,
+    GATEWAY_SIM_TIMEOUT_SECONDS,
     LAB_DIR,
     RUN_TIMEOUT_SECONDS,
     RUNNER_JOBS_DIR,
@@ -20,6 +21,11 @@ from app.lab_config import (
 
 
 MAX_OUTPUT_CHARS = 60_000
+MAX_SIMULATION_OUTPUT_CHARS = 2_000
+SIMULATION_COMMANDS = {
+    "config_show": "/config show",
+    "debug_show": "/debug show",
+}
 
 
 @dataclass(frozen=True)
@@ -36,6 +42,30 @@ class CommandResult:
             "exit_code": self.exit_code,
             "command": " ".join(self.command),
             "output": self.output,
+            "duration_ms": self.duration_ms,
+        }
+
+
+@dataclass(frozen=True)
+class GatewaySimulationResult:
+    ok: bool
+    role: str
+    command: str
+    display_command: str
+    outcome: str
+    summary: str
+    safe_output: str
+    duration_ms: int
+
+    def to_response(self) -> dict[str, object]:
+        return {
+            "ok": self.ok,
+            "role": self.role,
+            "command": self.command,
+            "display_command": self.display_command,
+            "outcome": self.outcome,
+            "summary": self.summary,
+            "safe_output": self.safe_output,
             "duration_ms": self.duration_ms,
         }
 
@@ -103,20 +133,24 @@ def _workspace_path_for_file_runner(workspace_dir: Path) -> str:
     return str(CONTAINER_WORKSPACES_DIR / rel)
 
 
-def _run_via_file_runner(workspace_dir: Path, timeout_seconds: int) -> CommandResult:
+def _submit_file_runner_job(
+    workspace_dir: Path,
+    payload: dict[str, object],
+    timeout_seconds: int,
+) -> dict[str, object]:
     RUNNER_JOBS_DIR.mkdir(parents=True, exist_ok=True)
     job_id = uuid.uuid4().hex
     request_path = RUNNER_JOBS_DIR / f"{job_id}.request.json"
     result_path = RUNNER_JOBS_DIR / f"{job_id}.result.json"
     tmp_path = RUNNER_JOBS_DIR / f"{job_id}.request.tmp"
 
-    payload = {
+    request_payload = {
         "id": job_id,
         "workspace": _workspace_path_for_file_runner(workspace_dir),
-        "command": list(TEST_COMMAND),
         "timeout_seconds": timeout_seconds,
+        **payload,
     }
-    tmp_path.write_text(json.dumps(payload), encoding="utf-8")
+    tmp_path.write_text(json.dumps(request_payload), encoding="utf-8")
     tmp_path.replace(request_path)
 
     started = time.monotonic()
@@ -127,22 +161,31 @@ def _run_via_file_runner(workspace_dir: Path, timeout_seconds: int) -> CommandRe
             raw = json.loads(result_path.read_text(encoding="utf-8"))
             result_path.unlink(missing_ok=True)
             request_path.unlink(missing_ok=True)
-            return CommandResult(
-                ok=bool(raw.get("ok")),
-                exit_code=int(raw.get("exit_code", 1)),
-                command=TEST_COMMAND,
-                output=_truncate_output(str(raw.get("output", ""))),
-                duration_ms=int(raw.get("duration_ms", duration_ms)),
-            )
+            raw.setdefault("duration_ms", duration_ms)
+            return raw
         time.sleep(0.2)
 
     request_path.unlink(missing_ok=True)
+    return {
+        "ok": False,
+        "exit_code": 124,
+        "output": f"Runner timed out after {timeout_seconds}s.",
+        "duration_ms": int((time.monotonic() - started) * 1000),
+    }
+
+
+def _run_via_file_runner(workspace_dir: Path, timeout_seconds: int) -> CommandResult:
+    raw = _submit_file_runner_job(
+        workspace_dir,
+        {"job_type": "tests"},
+        timeout_seconds,
+    )
     return CommandResult(
-        ok=False,
-        exit_code=124,
+        ok=bool(raw.get("ok")),
+        exit_code=int(raw.get("exit_code", 1)),
         command=TEST_COMMAND,
-        output=f"Runner timed out after {timeout_seconds}s.",
-        duration_ms=int((time.monotonic() - started) * 1000),
+        output=_truncate_output(str(raw.get("output", ""))),
+        duration_ms=int(raw.get("duration_ms", 0)),
     )
 
 
@@ -153,3 +196,55 @@ def run_fixed_tests(workspace_dir: Path, timeout_seconds: int = RUN_TIMEOUT_SECO
         return _run_via_file_runner(workspace_dir, timeout_seconds)
     return _run_local(workspace_dir, timeout_seconds)
 
+
+def _error_simulation(role: str, command: str, summary: str) -> GatewaySimulationResult:
+    return GatewaySimulationResult(
+        ok=False,
+        role=role,
+        command=command,
+        display_command=SIMULATION_COMMANDS.get(command, command),
+        outcome="error",
+        summary=summary,
+        safe_output="Simulation did not complete.",
+        duration_ms=0,
+    )
+
+
+def _run_gateway_simulation_via_file_runner(
+    workspace_dir: Path,
+    role: str,
+    command: str,
+    timeout_seconds: int,
+) -> GatewaySimulationResult:
+    raw = _submit_file_runner_job(
+        workspace_dir,
+        {
+            "job_type": "gateway_simulation",
+            "role": role,
+            "command_id": command,
+        },
+        timeout_seconds,
+    )
+    return GatewaySimulationResult(
+        ok=bool(raw.get("ok")),
+        role=role,
+        command=command,
+        display_command=str(raw.get("display_command", SIMULATION_COMMANDS.get(command, command))),
+        outcome=str(raw.get("outcome", "error")),
+        summary=str(raw.get("summary", "Gateway simulation failed."))[:500],
+        safe_output=str(raw.get("safe_output", ""))[:MAX_SIMULATION_OUTPUT_CHARS],
+        duration_ms=int(raw.get("duration_ms", 0)),
+    )
+
+
+def run_gateway_simulation(
+    workspace_dir: Path,
+    role: str,
+    command: str,
+    timeout_seconds: int = GATEWAY_SIM_TIMEOUT_SECONDS,
+) -> GatewaySimulationResult:
+    if role not in {"owner", "operator"} or command not in SIMULATION_COMMANDS:
+        return _error_simulation(role, command, "Unsupported gateway simulation request.")
+    if RUNNER_MODE != "file":
+        return _error_simulation(role, command, "Gateway simulation requires the isolated file runner.")
+    return _run_gateway_simulation_via_file_runner(workspace_dir, role, command, timeout_seconds)

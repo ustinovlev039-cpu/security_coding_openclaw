@@ -4,13 +4,21 @@ import json
 import grp
 import os
 import pwd
+import select
+import shutil
 import subprocess
 import time
+import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 
 JOBS_DIR = Path(os.getenv("RUNNER_JOBS_DIR", "/runner-jobs")).resolve()
 WORKSPACES_ROOT = Path(os.getenv("RUNNER_WORKSPACES_ROOT", "/workspaces")).resolve()
+RUNTIME_ROOT = Path(os.getenv("RUNNER_RUNTIME_ROOT", "/tmp")).resolve()
+NODE_MODULES_SOURCE = Path(
+    os.getenv("RUNNER_NODE_MODULES_SOURCE", "/deps/project/node_modules")
+).resolve()
 ALLOWED_COMMAND = (
     "pnpm",
     "exec",
@@ -19,7 +27,18 @@ ALLOWED_COMMAND = (
     "src/auto-reply/reply/commands.test.ts",
 )
 MAX_OUTPUT_CHARS = 60_000
+MAX_SIMULATION_OUTPUT_BYTES = 80_000
+SIMULATION_SAFE_OUTPUT_CHARS = 2_000
+SIMULATION_TIMEOUT_SECONDS = 20
+SIMULATION_RESULT_PREFIX = "__OPENCLAW_GATEWAY_SIMULATION_RESULT__"
 TEST_USER = os.getenv("RUNNER_TEST_USER", "labuser")
+RUNTIME_NODE_MODULES_WRITABLE = {".vite", ".vite-temp"}
+SIMULATION_DRIVER = Path("/runner/gateway-simulation-driver.ts")
+SIMULATION_COMMANDS = {
+    "config_show": "/config show",
+    "debug_show": "/debug show",
+}
+SIMULATION_ROLES = {"owner", "operator"}
 
 
 def truncate_output(output: str) -> str:
@@ -51,23 +70,111 @@ def drop_to_test_user(uid: int, gid: int):
     return demote
 
 
-def run_job(payload: dict[str, object]) -> dict[str, object]:
-    command = tuple(str(part) for part in payload.get("command", []))
-    if command != ALLOWED_COMMAND:
-        raise ValueError("unsupported command")
+@contextmanager
+def effective_user(uid: int, gid: int):
+    os.setegid(gid)
+    os.seteuid(uid)
+    try:
+        yield
+    finally:
+        os.seteuid(0)
+        os.setegid(0)
 
+
+def chmod_dir(path: Path, mode: int = 0o700) -> None:
+    os.chmod(path, mode)
+
+
+def link_workspace(source: Path, destination: Path) -> None:
+    destination.mkdir()
+    for child in source.iterdir():
+        if child.name == "node_modules":
+            continue
+        (destination / child.name).symlink_to(child, target_is_directory=child.is_dir())
+
+
+def link_node_modules(destination: Path) -> None:
+    if not NODE_MODULES_SOURCE.is_dir():
+        raise ValueError("dependency layer is missing node_modules")
+
+    node_modules = destination / "node_modules"
+    node_modules.mkdir()
+    for child in NODE_MODULES_SOURCE.iterdir():
+        if child.name in RUNTIME_NODE_MODULES_WRITABLE:
+            continue
+        (node_modules / child.name).symlink_to(child, target_is_directory=child.is_dir())
+    for name in RUNTIME_NODE_MODULES_WRITABLE:
+        (node_modules / name).mkdir()
+
+
+def prepare_runtime_workspace(workspace: Path) -> tuple[Path, Path]:
+    job_root = RUNTIME_ROOT / f"job-{uuid.uuid4().hex}"
+    runtime_workspace = job_root / "workspace"
+    job_home = job_root / "home"
+    job_tmp = job_root / "tmp"
+
+    try:
+        job_root.mkdir(mode=0o700)
+        link_workspace(workspace, runtime_workspace)
+        link_node_modules(runtime_workspace)
+        job_home.mkdir()
+        job_tmp.mkdir()
+
+        for path in (
+            job_root,
+            runtime_workspace,
+            runtime_workspace / "node_modules",
+            runtime_workspace / "node_modules" / ".vite",
+            runtime_workspace / "node_modules" / ".vite-temp",
+            job_home,
+            job_tmp,
+        ):
+            chmod_dir(path)
+
+        return runtime_workspace, job_root
+    except Exception:
+        shutil.rmtree(job_root, ignore_errors=True)
+        raise
+
+
+def run_job(payload: dict[str, object]) -> dict[str, object]:
+    if "command" in payload:
+        raise ValueError("command strings are not accepted")
+
+    job_type = str(payload.get("job_type", ""))
+    if job_type == "tests":
+        return run_tests_job(payload)
+    if job_type == "gateway_simulation":
+        return run_gateway_simulation_job(payload)
+    raise ValueError("unsupported job type")
+
+
+def run_tests_job(payload: dict[str, object]) -> dict[str, object]:
     workspace = safe_workspace(str(payload.get("workspace", "")))
     timeout_seconds = int(payload.get("timeout_seconds", 120))
     uid, gid = test_user_ids()
     started = time.monotonic()
+    job_root: Path | None = None
 
     try:
+        with effective_user(uid, gid):
+            runtime_workspace, job_root = prepare_runtime_workspace(workspace)
+        runtime_command = (
+            "pnpm",
+            "--dir",
+            str(runtime_workspace),
+            "exec",
+            "vitest",
+            "run",
+            "src/auto-reply/reply/commands.test.ts",
+        )
         completed = subprocess.run(
-            ALLOWED_COMMAND,
-            cwd=workspace,
+            runtime_command,
             env={
                 "PATH": os.environ.get("PATH", ""),
-                "HOME": "/tmp",
+                "HOME": str(job_root / "home"),
+                "TMPDIR": str(job_root / "tmp"),
+                "XDG_CACHE_HOME": str(job_root / "home" / ".cache"),
                 "CI": "true",
                 "NO_COLOR": "1",
                 "FORCE_COLOR": "0",
@@ -99,6 +206,193 @@ def run_job(payload: dict[str, object]) -> dict[str, object]:
             "output": truncate_output(f"{output}\nTimed out after {timeout_seconds}s."),
             "duration_ms": int((time.monotonic() - started) * 1000),
         }
+    finally:
+        if job_root is not None:
+            with effective_user(uid, gid):
+                shutil.rmtree(job_root, ignore_errors=True)
+
+
+def run_limited_process(
+    runtime_command: tuple[str, ...],
+    env: dict[str, str],
+    timeout_seconds: int,
+    uid: int,
+    gid: int,
+    max_output_bytes: int,
+) -> tuple[int, str, int, bool]:
+    started = time.monotonic()
+    deadline = started + timeout_seconds
+    buffer = bytearray()
+    truncated = False
+    process = subprocess.Popen(
+        runtime_command,
+        env=env,
+        preexec_fn=drop_to_test_user(uid, gid),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+
+    assert process.stdout is not None
+    fd = process.stdout.fileno()
+    timed_out = False
+
+    def append(data: bytes) -> None:
+        nonlocal truncated
+        buffer.extend(data)
+        if len(buffer) > max_output_bytes:
+            del buffer[: len(buffer) - max_output_bytes]
+            truncated = True
+
+    try:
+        while True:
+            if time.monotonic() > deadline:
+                timed_out = True
+                process.kill()
+                break
+            ready, _, _ = select.select([fd], [], [], 0.1)
+            if ready:
+                chunk = os.read(fd, 4096)
+                if chunk:
+                    append(chunk)
+            if process.poll() is not None:
+                while True:
+                    ready, _, _ = select.select([fd], [], [], 0)
+                    if not ready:
+                        break
+                    chunk = os.read(fd, 4096)
+                    if not chunk:
+                        break
+                    append(chunk)
+                break
+    finally:
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=2)
+
+    output = buffer.decode("utf-8", errors="replace")
+    if truncated:
+        output = "[output truncated]\n" + output
+    if timed_out:
+        output = f"{output}\nTimed out after {timeout_seconds}s."
+        return 124, output, int((time.monotonic() - started) * 1000), True
+    return process.returncode or 0, output, int((time.monotonic() - started) * 1000), truncated
+
+
+def safe_simulation_payload(
+    role: str,
+    command: str,
+    outcome: str,
+    ok: bool,
+    summary: str,
+    safe_output: str,
+    duration_ms: int,
+) -> dict[str, object]:
+    if outcome not in {"allowed", "blocked", "error"}:
+        outcome = "error"
+        ok = False
+        summary = "Gateway simulation returned an unsupported outcome."
+        safe_output = "Unsupported simulation result."
+    return {
+        "ok": ok,
+        "role": role,
+        "command": command,
+        "display_command": SIMULATION_COMMANDS.get(command, command),
+        "outcome": outcome,
+        "summary": summary[:500],
+        "safe_output": safe_output[:SIMULATION_SAFE_OUTPUT_CHARS],
+        "duration_ms": duration_ms,
+    }
+
+
+def parse_simulation_result(output: str, role: str, command: str, duration_ms: int) -> dict[str, object]:
+    for line in reversed(output.splitlines()):
+        if not line.startswith(SIMULATION_RESULT_PREFIX):
+            continue
+        raw = json.loads(line[len(SIMULATION_RESULT_PREFIX) :])
+        if raw.get("role") != role or raw.get("command") != command:
+            raise ValueError("simulation result did not match request")
+        return safe_simulation_payload(
+            role=role,
+            command=command,
+            outcome=str(raw.get("outcome", "error")),
+            ok=bool(raw.get("ok")),
+            summary=str(raw.get("summary", "")),
+            safe_output=str(raw.get("safe_output", "")),
+            duration_ms=duration_ms,
+        )
+    return safe_simulation_payload(
+        role=role,
+        command=command,
+        outcome="error",
+        ok=False,
+        summary="Gateway simulation did not return a structured result.",
+        safe_output="No structured simulation result was produced.",
+        duration_ms=duration_ms,
+    )
+
+
+def run_gateway_simulation_job(payload: dict[str, object]) -> dict[str, object]:
+    workspace = safe_workspace(str(payload.get("workspace", "")))
+    role = str(payload.get("role", ""))
+    command = str(payload.get("command_id", ""))
+    if role not in SIMULATION_ROLES:
+        raise ValueError("unsupported simulation role")
+    if command not in SIMULATION_COMMANDS:
+        raise ValueError("unsupported simulation command")
+
+    timeout_seconds = min(int(payload.get("timeout_seconds", SIMULATION_TIMEOUT_SECONDS)), 30)
+    uid, gid = test_user_ids()
+    job_root: Path | None = None
+
+    try:
+        with effective_user(uid, gid):
+            runtime_workspace, job_root = prepare_runtime_workspace(workspace)
+        runtime_command = (
+            "pnpm",
+            "--dir",
+            str(runtime_workspace),
+            "exec",
+            "tsx",
+            str(SIMULATION_DRIVER),
+            role,
+            command,
+        )
+        exit_code, output, duration_ms, _ = run_limited_process(
+            runtime_command,
+            env={
+                "PATH": os.environ.get("PATH", ""),
+                "HOME": str(job_root / "home"),
+                "TMPDIR": str(job_root / "tmp"),
+                "XDG_CACHE_HOME": str(job_root / "home" / ".cache"),
+                "CI": "true",
+                "NO_COLOR": "1",
+                "FORCE_COLOR": "0",
+                "OPENCLAW_SKIP_CHANNELS": "1",
+                "CLAWDBOT_SKIP_CHANNELS": "1",
+                "OPENCLAW_SIM_WORKSPACE": str(runtime_workspace),
+            },
+            timeout_seconds=timeout_seconds,
+            uid=uid,
+            gid=gid,
+            max_output_bytes=MAX_SIMULATION_OUTPUT_BYTES,
+        )
+        if exit_code == 124:
+            return safe_simulation_payload(
+                role=role,
+                command=command,
+                outcome="error",
+                ok=False,
+                summary="Gateway simulation timed out.",
+                safe_output="Simulation timed out.",
+                duration_ms=duration_ms,
+            )
+        return parse_simulation_result(output, role, command, duration_ms)
+    finally:
+        if job_root is not None:
+            with effective_user(uid, gid):
+                shutil.rmtree(job_root, ignore_errors=True)
 
 
 def write_result(result_path: Path, payload: dict[str, object]) -> None:

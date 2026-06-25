@@ -1,4 +1,7 @@
 export type LabStatus = "Vulnerable" | "Tests Running" | "Tests Failed" | "Lab Solved";
+export type GatewayRole = "owner" | "operator";
+export type GatewayCommand = "config_show" | "debug_show";
+export type GatewayOutcome = "allowed" | "blocked" | "error";
 
 export type TestRunSummary = {
   ok: boolean;
@@ -27,8 +30,31 @@ export type FileEntry = {
   editable: boolean;
 };
 
+export type TreeEntry = {
+  path: string;
+  name: string;
+  type: "file" | "directory";
+  language: string | null;
+  editable: boolean;
+  read_only: boolean;
+  pinned: boolean;
+  expandable: boolean;
+};
+
+export type TreeRow = TreeEntry & {
+  depth: number;
+};
+
 export type FileListResponse = {
   files: FileEntry[];
+};
+
+export type TreeResponse = {
+  path: string;
+  entries: TreeEntry[];
+  roots: string[];
+  pinned_paths: string[];
+  max_entries: number;
 };
 
 export type FileContentResponse = {
@@ -54,4 +80,18 @@ export type CheckSolutionResponse = {
   visible_tests: TestRunSummary;
   hidden_validation_passed: boolean;
   hidden_validation: string;
+};
+
+export type GatewaySimulationRequest = {
+  role: GatewayRole;
+  command: GatewayCommand;
+};
+
+export type GatewaySimulationResponse = GatewaySimulationRequest & {
+  ok: boolean;
+  display_command: string;
+  outcome: GatewayOutcome;
+  summary: string;
+  safe_output: string;
+  duration_ms: number;
 };

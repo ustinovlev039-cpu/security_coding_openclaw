@@ -16,13 +16,14 @@ COPY openclaw-training-fork ./
 RUN pnpm install --frozen-lockfile
 
 COPY docker/runner.py /runner/runner.py
+COPY docker/gateway-simulation-driver.ts /runner/gateway-simulation-driver.ts
 
 RUN useradd --system --create-home --home-dir /home/labuser --shell /usr/sbin/nologin labuser \
     && mkdir -p /runner-jobs /workspaces \
-    && chown root:root /runner-jobs /workspaces /runner/runner.py \
+    && chown root:root /runner-jobs /workspaces /runner/runner.py /runner/gateway-simulation-driver.ts \
     && chmod 0700 /runner-jobs \
     && chmod 0755 /workspaces \
-    && chmod 0644 /runner/runner.py
+    && chmod 0644 /runner/runner.py /runner/gateway-simulation-driver.ts
 
 ENV HOME=/root \
     CI=true \

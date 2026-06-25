@@ -4,7 +4,12 @@ import shutil
 import uuid
 from pathlib import Path
 
-from app.lab_config import EDITABLE_FILE_PATHS, TEMPLATE_DIR, WORKSPACES_DIR
+from app.lab_config import (
+    TEMPLATE_DIR,
+    TRUSTED_OVERLAY_ROOTS,
+    WORKSPACES_DIR,
+    is_trusted_overlay_path,
+)
 from app.runner import CommandResult, run_fixed_tests
 from app.workspace import _copy_ignore, link_dependency_artifacts
 
@@ -89,6 +94,29 @@ describe("ownerless gateway hidden validation", () => {
 '''
 
 
+def _trusted_overlay_paths(workspace_dir: Path) -> list[str]:
+    workspace_root = workspace_dir.resolve()
+    paths: set[str] = set()
+    for root in TRUSTED_OVERLAY_ROOTS:
+        scan_root = workspace_dir / root
+        if not scan_root.exists():
+            continue
+        if not scan_root.resolve().is_relative_to(workspace_root):
+            continue
+        candidates = [scan_root] if scan_root.is_file() else scan_root.rglob("*")
+        for path in candidates:
+            if not path.is_file() or path.is_symlink():
+                continue
+            if not path.resolve().is_relative_to(workspace_root):
+                continue
+            relative_path = path.relative_to(workspace_dir).as_posix()
+            template_path = TEMPLATE_DIR / relative_path
+            unchanged = template_path.is_file() and path.read_bytes() == template_path.read_bytes()
+            if is_trusted_overlay_path(relative_path) and not unchanged:
+                paths.add(relative_path)
+    return sorted(paths)
+
+
 def run_hidden_validation(workspace_dir: Path) -> CommandResult:
     hidden_workspace = WORKSPACES_DIR / f".hidden-{uuid.uuid4().hex}"
     if hidden_workspace.exists():
@@ -96,7 +124,7 @@ def run_hidden_validation(workspace_dir: Path) -> CommandResult:
 
     try:
         shutil.copytree(TEMPLATE_DIR, hidden_workspace, ignore=_copy_ignore, symlinks=True)
-        for relative_path in EDITABLE_FILE_PATHS:
+        for relative_path in _trusted_overlay_paths(workspace_dir):
             source = workspace_dir / relative_path
             destination = hidden_workspace / relative_path
             destination.parent.mkdir(parents=True, exist_ok=True)
