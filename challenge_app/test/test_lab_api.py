@@ -27,6 +27,7 @@ def test_status_initializes_workspace():
     assert body["name"] == "OpenClaw: Ownerless Gateway"
     assert body["category"] == "Broken Access Control / Security Coding"
     assert body["status"] == STATUS_VULNERABLE
+    assert body["workspace"] == "default"
     assert body["allowed_files"] == list(EDITABLE_FILE_PATHS)
     assert body["editable_files"] == list(EDITABLE_FILE_PATHS)
     assert TEST_FILE_PATH in body["readable_files"]
@@ -153,6 +154,7 @@ def test_reset_restores_baseline_file_content():
     reset = client.post("/api/lab/reset")
     assert reset.status_code == 200
     assert reset.json()["status"] == STATUS_VULNERABLE
+    assert reset.json()["workspace"] == "default"
 
     restored = client.get(f"/api/lab/files/{path}")
     assert restored.status_code == 200

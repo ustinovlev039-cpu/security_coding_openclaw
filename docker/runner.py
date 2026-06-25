@@ -5,6 +5,7 @@ import grp
 import os
 import pwd
 import select
+import signal
 import shutil
 import subprocess
 import time
@@ -68,6 +69,27 @@ def drop_to_test_user(uid: int, gid: int):
         os.setuid(uid)
 
     return demote
+
+
+def start_process_group_as_test_user(uid: int, gid: int):
+    def demote() -> None:
+        os.setsid()
+        os.setgroups([])
+        os.setgid(gid)
+        os.setuid(uid)
+
+    return demote
+
+
+def kill_process_group(pid: int, uid: int | None = None, gid: int | None = None) -> None:
+    try:
+        if uid is None or gid is None:
+            os.killpg(pid, signal.SIGKILL)
+        else:
+            with effective_user(uid, gid):
+                os.killpg(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 @contextmanager
@@ -227,7 +249,7 @@ def run_limited_process(
     process = subprocess.Popen(
         runtime_command,
         env=env,
-        preexec_fn=drop_to_test_user(uid, gid),
+        preexec_fn=start_process_group_as_test_user(uid, gid),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
@@ -247,7 +269,7 @@ def run_limited_process(
         while True:
             if time.monotonic() > deadline:
                 timed_out = True
-                process.kill()
+                kill_process_group(process.pid, uid, gid)
                 break
             ready, _, _ = select.select([fd], [], [], 0.1)
             if ready:
@@ -268,7 +290,7 @@ def run_limited_process(
         try:
             process.wait(timeout=2)
         except subprocess.TimeoutExpired:
-            process.kill()
+            kill_process_group(process.pid, uid, gid)
             process.wait(timeout=2)
 
     output = buffer.decode("utf-8", errors="replace")
@@ -395,6 +417,67 @@ def run_gateway_simulation_job(payload: dict[str, object]) -> dict[str, object]:
                 shutil.rmtree(job_root, ignore_errors=True)
 
 
+def matching_proc_cmdlines(marker: str) -> list[str]:
+    matches: list[str] = []
+    proc = Path("/proc")
+    if not proc.is_dir():
+        return matches
+    for candidate in proc.iterdir():
+        if not candidate.name.isdigit():
+            continue
+        try:
+            raw = (candidate / "cmdline").read_bytes().replace(b"\0", b" ").decode(
+                "utf-8",
+                errors="replace",
+            )
+        except OSError:
+            continue
+        if marker in raw:
+            matches.append(raw)
+    return matches
+
+
+def timeout_cleanup_self_check() -> dict[str, object]:
+    uid, gid = test_user_ids()
+    marker = f"openclaw-timeout-child-{uuid.uuid4().hex}"
+    exit_code, _, _, _ = run_limited_process(
+        (
+            "python3",
+            "-c",
+            "import subprocess,sys,time; subprocess.Popen([sys.executable,'-c','import sys,time; time.sleep(30)',sys.argv[1]]); time.sleep(30)",
+            marker,
+        ),
+        env={"PATH": os.environ.get("PATH", "")},
+        timeout_seconds=1,
+        uid=uid,
+        gid=gid,
+        max_output_bytes=10_000,
+    )
+    time.sleep(0.5)
+    leaked = matching_proc_cmdlines(marker)
+
+    before = {path.name for path in RUNTIME_ROOT.glob("job-*")}
+    workspace = os.getenv("RUNNER_SELF_CHECK_WORKSPACE", str(WORKSPACES_ROOT / "default"))
+    result = run_gateway_simulation_job(
+        {
+            "workspace": workspace,
+            "role": "owner",
+            "command_id": "debug_show",
+            "timeout_seconds": 0,
+        }
+    )
+    after = {path.name for path in RUNTIME_ROOT.glob("job-*")}
+    runtime_removed = before == after
+    ok = exit_code == 124 and result.get("outcome") == "error" and runtime_removed and not leaked
+    return {
+        "ok": ok,
+        "timeout_exit_code": exit_code,
+        "simulation_outcome": result.get("outcome"),
+        "runtime_removed": runtime_removed,
+        "leaked_processes": leaked,
+    }
+
+
 def write_result(result_path: Path, payload: dict[str, object]) -> None:
     tmp = result_path.with_suffix(".result.tmp")
     tmp.unlink(missing_ok=True)
@@ -426,6 +509,11 @@ def process_request(request_path: Path) -> None:
 
 
 def main() -> None:
+    if os.getenv("RUNNER_SELF_CHECK") == "timeout_cleanup":
+        result = timeout_cleanup_self_check()
+        print(json.dumps(result))
+        raise SystemExit(0 if result["ok"] else 1)
+
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
     os.chmod(JOBS_DIR, 0o700)
     while True:

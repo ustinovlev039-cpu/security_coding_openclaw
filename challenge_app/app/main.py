@@ -15,6 +15,7 @@ from app.lab_config import (
     STATUS_TESTS_RUNNING,
     STATUS_VULNERABLE,
     WORKSPACE_DIR,
+    WORKSPACE_ID,
 )
 from app.runner import run_fixed_tests, run_gateway_simulation
 from app.schemas import (
@@ -78,7 +79,7 @@ def _status_response() -> LabStatusResponse:
         name=LAB_TITLE,
         category=LAB_CATEGORY,
         status=state.get("status", STATUS_VULNERABLE),
-        workspace=str(WORKSPACE_DIR),
+        workspace=WORKSPACE_ID,
         allowed_files=list(ALLOWED_FILE_PATHS),
         editable_files=list(EDITABLE_FILE_PATHS),
         readable_files=list(READABLE_FILE_PATHS),
@@ -130,7 +131,7 @@ def run_tests() -> TestRunResponse:
 @app.post("/api/lab/reset", response_model=ResetResponse)
 def reset_lab() -> ResetResponse:
     workspace = reset_workspace()
-    return ResetResponse(status=STATUS_VULNERABLE, workspace=str(workspace))
+    return ResetResponse(status=STATUS_VULNERABLE, workspace=WORKSPACE_ID)
 
 
 @app.post("/api/lab/check-solution", response_model=CheckSolutionResponse)

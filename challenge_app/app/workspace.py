@@ -100,6 +100,19 @@ def link_dependency_artifacts(workspace_dir: Path) -> None:
     destination.symlink_to(target, target_is_directory=True)
 
 
+def apply_workspace_owner(workspace_dir: Path) -> None:
+    uid_raw = os.getenv("LAB_WORKSPACE_OWNER_UID")
+    gid_raw = os.getenv("LAB_WORKSPACE_OWNER_GID")
+    if not uid_raw or not gid_raw:
+        return
+    uid = int(uid_raw)
+    gid = int(gid_raw)
+    for root, dirs, files in os.walk(workspace_dir, followlinks=False):
+        os.chown(root, uid, gid, follow_symlinks=False)
+        for name in [*dirs, *files]:
+            os.chown(Path(root) / name, uid, gid, follow_symlinks=False)
+
+
 def reset_workspace() -> Path:
     if not (TEMPLATE_DIR / "package.json").exists():
         raise RuntimeError(f"OpenClaw template not found at {TEMPLATE_DIR}")
@@ -110,6 +123,7 @@ def reset_workspace() -> Path:
 
     shutil.copytree(TEMPLATE_DIR, WORKSPACE_DIR, ignore=_copy_ignore)
     link_dependency_artifacts(WORKSPACE_DIR)
+    apply_workspace_owner(WORKSPACE_DIR)
     write_state(_default_state())
     return WORKSPACE_DIR
 
@@ -118,6 +132,7 @@ def ensure_workspace() -> Path:
     if not (WORKSPACE_DIR / "package.json").exists():
         return reset_workspace()
     link_dependency_artifacts(WORKSPACE_DIR)
+    apply_workspace_owner(WORKSPACE_DIR)
     return WORKSPACE_DIR
 
 

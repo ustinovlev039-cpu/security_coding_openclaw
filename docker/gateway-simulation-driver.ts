@@ -8,6 +8,9 @@ type CommandId = "config_show" | "debug_show";
 type Outcome = "allowed" | "blocked" | "error";
 
 const RESULT_PREFIX = "__OPENCLAW_GATEWAY_SIMULATION_RESULT__";
+const trustedWrite = process.stdout.write.bind(process.stdout);
+const trustedExit = process.exit.bind(process);
+const trustedStringify = JSON.stringify.bind(JSON);
 const COMMANDS: Record<CommandId, string> = {
   config_show: "/config show",
   debug_show: "/debug show",
@@ -21,7 +24,14 @@ function clean(value: string, replacements: string[]): string {
   return output.slice(0, 2_000);
 }
 
-function emit(result: {
+function isProtectedCommandOutput(command: CommandId, text: string): boolean {
+  if (command === "config_show") {
+    return /^⚙️ Config(?:\s|\()/u.test(text);
+  }
+  return text.includes("⚙️ Debug overrides");
+}
+
+function finish(result: {
   ok: boolean;
   role: Role;
   command: CommandId;
@@ -29,15 +39,24 @@ function emit(result: {
   outcome: Outcome;
   summary: string;
   safe_output: string;
-}) {
-  process.stdout.write(`${RESULT_PREFIX}${JSON.stringify(result)}\n`);
+}, exitCode = 0): never {
+  trustedWrite(`${RESULT_PREFIX}${trustedStringify(result)}\n`);
+  trustedExit(exitCode);
 }
 
 async function main() {
   const role = process.argv[2] as Role;
   const command = process.argv[3] as CommandId;
   if (!["owner", "operator"].includes(role) || !["config_show", "debug_show"].includes(command)) {
-    throw new Error("invalid simulation request");
+    finish({
+      ok: false,
+      role: "operator",
+      command: "config_show",
+      display_command: "/config show",
+      outcome: "error",
+      summary: "Gateway simulation received an invalid fixed scenario.",
+      safe_output: "Invalid simulation request.",
+    }, 1);
   }
 
   const workspace = process.env.OPENCLAW_SIM_WORKSPACE ?? process.cwd();
@@ -89,8 +108,8 @@ async function main() {
 
     const result = await handleCommands(params);
     const text = result.reply?.text ? clean(String(result.reply.text), replacements) : "";
-    const outcome: Outcome = text ? "allowed" : "blocked";
-    emit({
+    const outcome: Outcome = isProtectedCommandOutput(command, text) ? "allowed" : "blocked";
+    finish({
       ok: true,
       role,
       command,
@@ -99,11 +118,11 @@ async function main() {
       summary:
         outcome === "allowed"
           ? "Gateway returned the protected command response."
-          : "Gateway did not return a protected command response.",
+          : "Gateway blocked or withheld the protected command response.",
       safe_output: text || "No reply was returned.",
     });
   } catch (error) {
-    emit({
+    finish({
       ok: false,
       role,
       command,
@@ -116,7 +135,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  emit({
+  finish({
     ok: false,
     role: "operator",
     command: "config_show",
@@ -124,5 +143,5 @@ main().catch((error) => {
     outcome: "error",
     summary: "Gateway simulation failed before request validation completed.",
     safe_output: error instanceof Error ? error.message.slice(0, 2_000) : String(error).slice(0, 2_000),
-  });
+  }, 1);
 });

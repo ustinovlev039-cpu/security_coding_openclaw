@@ -16,6 +16,8 @@ services:
       LAB_CONTAINER_WORKSPACES_DIR: /workspaces
       LAB_NODE_MODULES_TARGET: /deps/project/node_modules
       LAB_RUN_TIMEOUT_SECONDS: 120
+      LAB_WORKSPACE_OWNER_UID: 10001
+      LAB_WORKSPACE_OWNER_GID: 10001
     volumes:
       - ./openclaw-training-fork:/app/openclaw-training-fork:ro
       - openclaw_lab_workspaces:/app/.lab/workspaces
@@ -42,6 +44,36 @@ services:
     cpus: 1.0
     security_opt:
       - no-new-privileges:true
+
+  ide:
+    build:
+      context: .
+      dockerfile: docker/ide.Dockerfile
+      extra_hosts:
+        - "registry.npmjs.org:104.16.0.35"
+        - "github.com:140.82.112.3"
+        - "release-assets.githubusercontent.com:185.199.111.133"
+        - "objects.githubusercontent.com:185.199.108.133"
+    container_name: openclaw-lab-ide
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - openclaw_lab_workspaces:/workspaces
+      - openclaw_lab_ide_data:/ide-data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    mem_limit: 2g
+    cpus: 1.5
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - ide_internal
 
   runner:
     build:
@@ -73,3 +105,10 @@ services:
 volumes:
   openclaw_lab_workspaces:
   openclaw_lab_runner_jobs:
+  openclaw_lab_ide_data:
+
+networks:
+  ide_internal:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
