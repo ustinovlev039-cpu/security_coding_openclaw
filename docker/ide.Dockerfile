@@ -21,6 +21,8 @@ RUN curl -fsSL "${CODE_SERVER_URL}" -o /tmp/code-server.tar.gz \
       '}' > /ide-data/user-data/User/settings.json \
     && chown -R labuser:labuser /ide-data /workspaces
 
+COPY docker/openclaw-lab.code-workspace /opt/openclaw-lab.code-workspace
+
 ENV HOME=/ide-data/home \
     TMPDIR=/tmp \
     VSCODE_DISABLE_TELEMETRY=1 \
@@ -31,4 +33,4 @@ WORKDIR /workspaces/default
 
 EXPOSE 3000
 
-CMD ["sh", "-lc", "while [ ! -f /workspaces/default/package.json ]; do sleep 0.2; done; exec code-server /workspaces/default --bind-addr 0.0.0.0:3000 --auth none --disable-telemetry --disable-update-check --user-data-dir /ide-data/user-data --extensions-dir /ide-data/extensions --app-name 'OpenClaw Security Lab — Ownerless Gateway'"]
+CMD ["code-server", "/opt/openclaw-lab.code-workspace", "--bind-addr", "0.0.0.0:3000", "--auth", "none", "--disable-telemetry", "--disable-update-check", "--user-data-dir", "/ide-data/user-data", "--extensions-dir", "/ide-data/extensions", "--app-name", "OpenClaw Security Lab"]
